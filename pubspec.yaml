@@ -1,0 +1,44 @@
+name: hello_flutter
+description: "Slushi app"
+publish_to: "none"
+
+version: 1.0.0+4
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  webview_flutter: ^4.13.1
+
+  # Map + gps
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^13.0.4
+
+  # Google Sheet
+  http: ^1.2.1
+
+  # Images + navigate
+  cached_network_image: ^3.3.1
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon_foreground.png
+  adaptive_icon_foreground: assets/icon_foreground.png
+  adaptive_icon_background: "#AEE8FF"

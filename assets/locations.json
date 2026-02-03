@@ -1,0 +1,58 @@
+[
+  {
+    "id": "braincooler_stromso",
+    "name": "Braincooler",
+    "description": "Various flavors of Braincooler slush.",
+    "address": "Circle K Strømsø",
+    "lat": 59.74037,
+    "lng": 10.19794
+  },
+  {
+    "id": "scoopslush_bar50_kobenhavn",
+    "name": "Scoop Slush",
+    "description": "Various flavors of Scoop slush.",
+    "address": "Bar50 København",
+    "lat": 55.67108,
+    "lng": 12.57651
+  },
+  {
+    "id": "braincooler_bigbite_kvadrat",
+    "name": "Braincooler",
+    "description": "Various flavors of Braincooler slush.",
+    "address": "Big Bite Kvadrat",
+    "lat": 58.87696,
+    "lng": 5.72204
+  },
+  {
+    "id": "scoopslush_falun_strandby",
+    "name": "Scoop slush",
+    "description": "Various flavors of Scoop slush",
+    "address": "Falun Strandby",
+    "lat": 60.57964,
+    "lng": 15.67336
+  },
+  {
+    "id": "scoopslush_foodstation_karlstad",
+    "name": "Scoop Slush",
+    "description": "Various flavors of Scoop slush",
+    "address": "Food Station Karlstad",
+    "lat": 59.38126,
+    "lng": 13.50458
+  },
+  {
+    "id": "braincooler_circlek_volda",
+    "name": "Braincooler",
+    "description": "Various flavors of Braincooler slush.",
+    "address": "Circle K Volda",
+    "lat": 62.14501,
+    "lng": 6.07259
+  },
+  {
+    "id": "iceslush_smashbuddies_askim",
+    "name": "Ice slush",
+    "description": "Various flavors of Ice slush.",
+    "address": "Smash Buddies Askim",
+    "lat": 59.58274,
+    "lng": 11.16637
+  }
+]
