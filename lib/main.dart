@@ -8,9 +8,9 @@ import 'package:hello_flutter/pages/webview_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const SlushiApp());
 }
 
@@ -65,7 +65,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   static const String logoAsset = 'assets/Icon2.png';
   static const String pinAsset = 'assets/pin.png';
 
-  // ✅ Your published CSV link (you sent this)
+  // ✅ Published CSV link
   static const String _csvUrl =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vTAOcnlq0N_r7itvVdMhhzoWLo4AmXlvb1KwZlpjZnbNoslqExGlqdpRUxnWa1wqPGo9Lmnhqr5LTMi/pub?output=csv';
 
@@ -81,11 +81,17 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
 
   LatLng? _myLocation;
   bool _loadingMyLocation = false;
+  bool _didAutoCenterOnce = false;
 
   @override
   void initState() {
     super.initState();
     _loadLocationsFromPublishedCsv();
+
+    // Try once after first frame (and show errors so you can see what's happening).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _goToMyLocation(showErrors: true, auto: true);
+    });
   }
 
   /// Opens Privacy Policy inside the app (WebView)
@@ -99,6 +105,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       ),
     );
   }
+
   /// Opens Contact Us inside the app (WebView)
   void _openContactUsInApp() {
     Navigator.of(context).push(
@@ -107,6 +114,16 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
           title: 'Contact Us',
           url: 'https://slushi.no/contact.html',
         ),
+      ),
+    );
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -153,7 +170,6 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
         final description = descI == -1 ? '' : cell(descI);
         final address = addrI == -1 ? '' : cell(addrI);
 
-        // Handle comma decimals just in case
         final latStr = cell(latI).replaceAll(',', '.');
         final lngStr = cell(lngI).replaceAll(',', '.');
 
@@ -187,15 +203,11 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       setState(() => _locations = parsed);
 
       if (parsed.isEmpty && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No valid rows found in CSV.')),
-        );
+        _snack('No valid rows found in CSV.');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not load locations: $e')),
-      );
+      _snack('Could not load locations: $e');
     }
   }
 
@@ -241,34 +253,119 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
     return rows;
   }
 
-  Future<LatLng?> _getMyLocation() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return null;
+  /// Opens a dialog with a single action button.
+  Future<void> _showActionDialog({
+    required String title,
+    required String message,
+    required String actionText,
+    required Future<void> Function() action,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await action();
+            },
+            child: Text(actionText),
+          ),
+        ],
+      ),
+    );
+  }
 
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
+  /// Robust iOS/Android location flow with clear messages + fallback settings buttons.
+  Future<LatLng?> _getMyLocation({required bool showErrors}) async {
+    // Debug prints show in Xcode console
+    debugPrint('GET LOCATION: start');
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    debugPrint('GET LOCATION: serviceEnabled=$serviceEnabled');
+
+    if (!serviceEnabled) {
+      if (showErrors) {
+        _snack('Location Services are OFF. Turn them on in Settings.');
+        await _showActionDialog(
+          title: 'Location Services Off',
+          message:
+              'To find nearby slushi spots, turn on Location Services in iPhone Settings.',
+          actionText: 'Open Settings',
+          action: () => Geolocator.openLocationSettings(),
+        );
+      }
       return null;
     }
 
-    final pos = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-    return LatLng(pos.latitude, pos.longitude);
+    var perm = await Geolocator.checkPermission();
+    debugPrint('GET LOCATION: initial permission=$perm');
+
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+      debugPrint('GET LOCATION: after request permission=$perm');
+    }
+
+    if (perm == LocationPermission.denied) {
+      if (showErrors) _snack('Location permission denied.');
+      return null;
+    }
+
+    if (perm == LocationPermission.deniedForever) {
+      if (showErrors) {
+        _snack('Location permission is blocked. Enable it in Settings.');
+        await _showActionDialog(
+          title: 'Location Permission Blocked',
+          message:
+              'Location access is blocked for Slushi. Open Settings and set Location to “While Using the App”.',
+          actionText: 'Open App Settings',
+          action: () => Geolocator.openAppSettings(),
+        );
+      }
+      return null;
+    }
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 12),
+      );
+      debugPrint('GET LOCATION: success lat=${pos.latitude} lng=${pos.longitude}');
+      return LatLng(pos.latitude, pos.longitude);
+    } catch (e) {
+      debugPrint('GET LOCATION: error $e');
+      if (showErrors) _snack('Could not get your location. Try again.');
+      return null;
+    }
   }
 
-  Future<void> _goToMyLocation() async {
+  Future<void> _goToMyLocation({bool showErrors = true, bool auto = false}) async {
     if (_loadingMyLocation) return;
+
+    // Don’t keep nagging on app start
+    if (auto && _didAutoCenterOnce) return;
+
     setState(() => _loadingMyLocation = true);
 
     try {
-      final loc = await _getMyLocation();
+      final loc = await _getMyLocation(showErrors: showErrors);
       if (!mounted || loc == null) return;
 
       setState(() => _myLocation = loc);
-      _mapController.move(loc, 14.5);
+
+      // Move the map camera to the user location
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mapController.move(loc, 14.5);
+      });
+
+      if (auto) _didAutoCenterOnce = true;
     } finally {
       if (mounted) setState(() => _loadingMyLocation = false);
     }
@@ -277,7 +374,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   void _nearestSlush() async {
     if (_locations.isEmpty) return;
 
-    final me = _myLocation ?? await _getMyLocation();
+    final me = _myLocation ?? await _getMyLocation(showErrors: true);
     if (!mounted || me == null) return;
 
     setState(() => _myLocation = me);
@@ -294,7 +391,10 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       }
     }
 
-    _mapController.move(nearest.point, 15);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mapController.move(nearest.point, 15);
+    });
+
     _openLocationSheet(nearest, best);
   }
 
@@ -321,20 +421,18 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
         height: pinH,
         child: Builder(
           builder: (context) {
-            // counter-rotate so pin stays straight
             final rotation = MapCamera.of(context).rotationRad;
 
             return GestureDetector(
               onTap: () => _openLocationSheet(loc, 0),
               child: Transform.translate(
-                // move pin up so the "tip" hits the coordinate
                 offset: const Offset(0, -pinH / 2 + 6),
                 child: Transform.rotate(
                   angle: -rotation,
                   child: Image.asset(
-  pinAsset,
-  fit: BoxFit.contain,
-  filterQuality: FilterQuality.high, //
+                    pinAsset,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
                   ),
                 ),
               ),
@@ -372,11 +470,16 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
               ),
+              onMapReady: () {
+                if (_myLocation != null) {
+                  _mapController.move(_myLocation!, 14.5);
+                }
+              },
             ),
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.slushi',
+                userAgentPackageName: 'no.slushi.app',
               ),
               MarkerLayer(markers: markers),
               MarkerLayer(markers: myMarker),
@@ -412,10 +515,8 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
             left: 16,
             bottom: 54,
             child: _CircleButton(
-              icon: _loadingMyLocation
-                  ? Icons.hourglass_bottom
-                  : Icons.my_location,
-              onTap: _goToMyLocation,
+              icon: _loadingMyLocation ? Icons.hourglass_bottom : Icons.my_location,
+              onTap: () => _goToMyLocation(showErrors: true),
             ),
           ),
 
@@ -595,7 +696,6 @@ class LocationSheet extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
-
             if (location.imageUrl != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
@@ -620,7 +720,6 @@ class LocationSheet extends StatelessWidget {
               ),
               const SizedBox(height: 14),
             ],
-
             Row(
               children: [
                 Expanded(
@@ -646,63 +745,3 @@ class LocationSheet extends StatelessWidget {
   }
 }
 
-/// =======================
-/// WEBVIEW SCREEN
-/// =======================
-class WebViewScreen extends StatefulWidget {
-  final String title;
-  final String url;
-
-  const WebViewScreen({
-    super.key,
-    required this.title,
-    required this.url,
-  });
-
-  @override
-  State<WebViewScreen> createState() => _WebViewScreenState();
-}
-
-class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController _controller;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (_) => setState(() => _loading = true),
-          onPageFinished: (_) => setState(() => _loading = false),
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.url));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _controller.reload(),
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_loading)
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
-        ],
-      ),
-    );
-  }
-}
