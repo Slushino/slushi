@@ -83,7 +83,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> with WidgetsBin
   LatLng? _pendingCenter;
   double? _pendingZoom;
 
-final LatLng _startCenter = const LatLng(60.4720, 8.4689);
+  final LatLng _startCenter = const LatLng(60.4720, 8.4689);
   final double _startZoom = 5.6;
 
   List<SlushLocation> _locations = const [];
@@ -91,6 +91,12 @@ final LatLng _startCenter = const LatLng(60.4720, 8.4689);
   LatLng? _myLocation;
   bool _loadingMyLocation = false;
   bool _didAutoCenterOnce = false;
+
+  // Tile diagnostics (helps debug TestFlight blank maps without Xcode logs)
+  int _tileErrorCount = 0;
+  String? _lastTileError;
+  Timer? _tileErrDebounce;
+
 
   @override
   void initState() {
@@ -109,6 +115,7 @@ final LatLng _startCenter = const LatLng(60.4720, 8.4689);
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tileErrDebounce?.cancel();
     super.dispose();
   }
 
@@ -206,6 +213,31 @@ final LatLng _startCenter = const LatLng(60.4720, 8.4689);
       ),
     );
   }
+
+  void _noteTileError(Object error) {
+    _tileErrorCount++;
+    _lastTileError = error.toString();
+
+    // Avoid rebuilding the whole UI for every single failed tile
+    _tileErrDebounce?.cancel();
+    _tileErrDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  void _retryMapTiles() {
+    setState(() {
+      _mapReady = false;
+      _pendingCenter = null;
+      _pendingZoom = null;
+      _tileErrorCount = 0;
+      _lastTileError = null;
+      _mapController = MapController();
+      _mapKey = UniqueKey();
+    });
+  }
+
 
   Future<void> _loadLocationsFromPublishedCsv() async {
     try {
@@ -499,7 +531,8 @@ _openLocationSheet(nearest, best);
           behavior: HitTestBehavior.opaque,
           onTap: () => _openLocationSheet(loc, 0),
           child: Align(
-                child: SizedBox(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
               width: pinW,
               height: pinH,
               child: Image.asset(
@@ -562,24 +595,34 @@ _openLocationSheet(nearest, best);
                 // Consider switching to a commercial/free tier tile provider for stability.
                 urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
-                fallbackUrl: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 userAgentPackageName: 'no.slushi.app',
                 minZoom: 3,
                 maxZoom: 19,
                 maxNativeZoom: 19,
 
                 // Buffers help reduce “blank until interaction” during/after programmatic moves
-                panBuffer: 2,
-                keepBuffer: 6,
+                panBuffer: 1,
+                keepBuffer: 2,
 
                 // Prefer instant display to reduce odd fade/repaint states on iOS
                 tileDisplay: const TileDisplay.instantaneous(),
 
+                // Explicit headers help some servers accept requests on iOS/TestFlight
+                tileProvider: NetworkTileProvider(
+                  headers: const {
+                    'User-Agent': 'no.slushi.app',
+                  },
+                ),
+
+                // Evict failed tiles so they don't get stuck in cache
+                evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+
                 // Log tile failures (check device logs via Console.app when testing TestFlight)
                 errorTileCallback: (tile, error, stackTrace) {
-                  debugPrint('TILE ERROR z=${tile.coordinates.z} x=${tile.coordinates.x} y=${tile.coordinates.y}: $error');
+                  _noteTileError(error);
                 },
-              ),              MarkerLayer(alignment: Alignment.bottomCenter, markers: markers),
+              ),
+              MarkerLayer(alignment: Alignment.bottomCenter, markers: markers),
               MarkerLayer(alignment: Alignment.center, markers: myMarker),
 
               RichAttributionWidget(
@@ -590,6 +633,39 @@ _openLocationSheet(nearest, best);
               ),
             ],
           ),
+
+          // TILE DEBUG / RETRY (shows only if tiles are failing)
+          if (_tileErrorCount > 0)
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 110,
+              child: GestureDetector(
+                onTap: _retryMapTiles,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.72),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.wifi_off, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Map tiles failing ($_tileErrorCount). Tap to retry.\n${_lastTileError ?? ''}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
 
           // TOP BAR
           Positioned(
