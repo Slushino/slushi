@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -61,7 +62,7 @@ class LocationsMapScreen extends StatefulWidget {
   State<LocationsMapScreen> createState() => _LocationsMapScreenState();
 }
 
-class _LocationsMapScreenState extends State<LocationsMapScreen> {
+class _LocationsMapScreenState extends State<LocationsMapScreen> with WidgetsBindingObserver {
   static const String logoAsset = 'assets/Icon2.png';
   static const String pinAsset = 'assets/pin.png';
 
@@ -72,9 +73,17 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   // ✅ Privacy link
   static const String _privacyUrl = 'https://slushi.no/privacy.html';
 
-  final MapController _mapController = MapController();
+  late MapController _mapController;
 
-  final LatLng _startCenter = const LatLng(60.4720, 8.4689);
+  // iOS: force rebuild of the native map view on resume (prevents blank tiles)
+  Key _mapKey = UniqueKey();
+
+  // Gate camera moves until the map is ready
+  bool _mapReady = false;
+  LatLng? _pendingCenter;
+  double? _pendingZoom;
+
+final LatLng _startCenter = const LatLng(60.4720, 8.4689);
   final double _startZoom = 5.6;
 
   List<SlushLocation> _locations = const [];
@@ -86,11 +95,64 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _mapController = MapController();
     _loadLocationsFromPublishedCsv();
 
     // Try once after first frame (and show errors so you can see what's happening).
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _goToMyLocation(showErrors: true, auto: true);
+    });
+  }
+
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Recreate map widget + controller to avoid iOS blank tile state after reopen
+      setState(() {
+        _mapReady = false;
+        _pendingCenter = null;
+        _pendingZoom = null;
+        _mapController = MapController();
+        _mapKey = UniqueKey();
+      });
+
+      // Reload pins (cold start / resume timing differs in TestFlight sometimes)
+      _loadLocationsFromPublishedCsv();
+
+      // Re-center once map is ready if we already have a location
+      if (_myLocation != null) {
+        _pendingCenter = _myLocation;
+        _pendingZoom = 14.5;
+      }
+    }
+  }
+
+  double _clampZoom(double z) => z.clamp(3.0, 19.0);
+
+  void _safeMove(LatLng center, double zoom) {
+    final z = _clampZoom(zoom);
+
+    if (!_mapReady) {
+      _pendingCenter = center;
+      _pendingZoom = z;
+      return;
+    }
+
+    _mapController.move(center, z);
+
+    // iOS tile redraw workaround: a second move + rebuild shortly after often forces tiles to render
+    Future.delayed(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      _mapController.move(center, z);
+      setState(() {}); // force layers/tiles to repaint
     });
   }
 
@@ -361,11 +423,8 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       setState(() => _myLocation = loc);
 
       // Move the map camera to the user location
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _mapController.move(loc, 14.5);
-      });
-
-      if (auto) _didAutoCenterOnce = true;
+      _safeMove(loc, 14.5);
+if (auto) _didAutoCenterOnce = true;
     } finally {
       if (mounted) setState(() => _loadingMyLocation = false);
     }
@@ -391,11 +450,8 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       }
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapController.move(nearest.point, 15);
-    });
-
-    _openLocationSheet(nearest, best);
+    _safeMove(nearest.point, 15);
+_openLocationSheet(nearest, best);
   }
 
   void _openLocationSheet(SlushLocation loc, double distanceMeters) {
@@ -412,32 +468,33 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Marker> markers = _locations.map<Marker>((loc) {
+      // Use a square marker box + bottom-center alignment to prevent marker drift on zoom.
+      // (Non-square marker boxes can cause visible offset at different zoom levels in flutter_map.)
+      const double box = 60;
       const double pinW = 52;
       const double pinH = 60;
 
       return Marker(
         point: loc.point,
-        width: pinW,
-        height: pinH,
-        child: Builder(
-          builder: (context) {
-            final rotation = MapCamera.of(context).rotationRad;
-
-            return GestureDetector(
-              onTap: () => _openLocationSheet(loc, 0),
-              child: Transform.translate(
-                offset: const Offset(0, -pinH / 2 + 6),
-                child: Transform.rotate(
-                  angle: -rotation,
-                  child: Image.asset(
-                    pinAsset,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                  ),
-                ),
+        width: box,
+        height: box,
+        alignment: Alignment.bottomCenter,
+        rotate: true, // counter-rotate with the camera so the pin stays upright
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openLocationSheet(loc, 0),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              width: pinW,
+              height: pinH,
+              child: Image.asset(
+                pinAsset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
               ),
-            );
-          },
+            ),
+          ),
         ),
       );
     }).toList();
@@ -463,6 +520,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       body: Stack(
         children: [
           FlutterMap(
+            key: _mapKey,
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _startCenter,
@@ -471,8 +529,16 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
                 flags: InteractiveFlag.all,
               ),
               onMapReady: () {
-                if (_myLocation != null) {
-                  _mapController.move(_myLocation!, 14.5);
+                _mapReady = true;
+
+                if (_pendingCenter != null && _pendingZoom != null) {
+                  final c = _pendingCenter!;
+                  final z = _pendingZoom!;
+                  _pendingCenter = null;
+                  _pendingZoom = null;
+                  _safeMove(c, z);
+                } else if (_myLocation != null) {
+                  _safeMove(_myLocation!, 14.5);
                 }
               },
             ),
@@ -480,9 +546,14 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'no.slushi.app',
+                minZoom: 3,
+                maxZoom: 19,
+                maxNativeZoom: 19,
+                panBuffer: 2,
+                keepBuffer: 4,
               ),
-              MarkerLayer(markers: markers),
-              MarkerLayer(markers: myMarker),
+              MarkerLayer(alignment: Alignment.bottomCenter, markers: markers),
+              MarkerLayer(alignment: Alignment.center, markers: myMarker),
             ],
           ),
 
