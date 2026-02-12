@@ -560,9 +560,9 @@ _openLocationSheet(nearest, best);
               TileLayer(
                 // NOTE: tile.openstreetmap.org is not meant for heavy production app usage and may throttle/block.
                 // Consider switching to a commercial/free tier tile provider for stability.
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c'],
-                fallbackUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                fallbackUrl: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 userAgentPackageName: 'no.slushi.app',
                 minZoom: 3,
                 maxZoom: 19,
@@ -571,9 +571,6 @@ _openLocationSheet(nearest, best);
                 // Buffers help reduce “blank until interaction” during/after programmatic moves
                 panBuffer: 2,
                 keepBuffer: 6,
-
-                // Show a placeholder tile instead of leaving a blank gap when a tile fails to load
-                errorImage: AssetImage(logoAsset),
 
                 // Prefer instant display to reduce odd fade/repaint states on iOS
                 tileDisplay: const TileDisplay.instantaneous(),
@@ -584,6 +581,13 @@ _openLocationSheet(nearest, best);
                 },
               ),              MarkerLayer(alignment: Alignment.bottomCenter, markers: markers),
               MarkerLayer(alignment: Alignment.center, markers: myMarker),
+
+              RichAttributionWidget(
+                alignment: AttributionAlignment.bottomRight,
+                attributions: [
+                  TextSourceAttribution('© OpenStreetMap contributors © CARTO'),
+                ],
+              ),
             ],
           ),
 
@@ -845,4 +849,3 @@ class LocationSheet extends StatelessWidget {
     );
   }
 }
-
