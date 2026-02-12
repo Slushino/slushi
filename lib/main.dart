@@ -146,6 +146,22 @@ final LatLng _startCenter = const LatLng(60.4720, 8.4689);
       return;
     }
 
+    // Big zoom jumps can burst-request many tiles, which sometimes causes “blank map until interaction”
+    // on iOS/TestFlight. A 2-step move reduces request spikes.
+    final currentZoom = _mapController.camera.zoom;
+    final needsStep = (z - currentZoom).abs() > 4.5 && z > 11.5;
+
+    if (needsStep) {
+      final midZoom = (currentZoom < z) ? 12.0 : 10.0;
+      _mapController.move(center, _clampZoom(midZoom));
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (!mounted) return;
+        _mapController.move(center, z);
+        setState(() {}); // nudge repaint
+      });
+      return;
+    }
+
     _mapController.move(center, z);
 
     // iOS tile redraw workaround: a second move + rebuild shortly after often forces tiles to render
@@ -155,6 +171,7 @@ final LatLng _startCenter = const LatLng(60.4720, 8.4689);
       setState(() {}); // force layers/tiles to repaint
     });
   }
+
 
   /// Opens Privacy Policy inside the app (WebView)
   void _openPrivacyPolicyInApp() {
@@ -478,14 +495,11 @@ _openLocationSheet(nearest, best);
         point: loc.point,
         width: box,
         height: box,
-        alignment: Alignment.bottomCenter,
-        rotate: true, // counter-rotate with the camera so the pin stays upright
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _openLocationSheet(loc, 0),
           child: Align(
-            alignment: Alignment.bottomCenter,
-            child: SizedBox(
+                child: SizedBox(
               width: pinW,
               height: pinH,
               child: Image.asset(
@@ -544,15 +558,31 @@ _openLocationSheet(nearest, best);
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                // NOTE: tile.openstreetmap.org is not meant for heavy production app usage and may throttle/block.
+                // Consider switching to a commercial/free tier tile provider for stability.
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
+                fallbackUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'no.slushi.app',
                 minZoom: 3,
                 maxZoom: 19,
                 maxNativeZoom: 19,
+
+                // Buffers help reduce “blank until interaction” during/after programmatic moves
                 panBuffer: 2,
-                keepBuffer: 4,
-              ),
-              MarkerLayer(alignment: Alignment.bottomCenter, markers: markers),
+                keepBuffer: 6,
+
+                // Show a placeholder tile instead of leaving a blank gap when a tile fails to load
+                errorImage: AssetImage(logoAsset),
+
+                // Prefer instant display to reduce odd fade/repaint states on iOS
+                tileDisplay: const TileDisplay.instantaneous(),
+
+                // Log tile failures (check device logs via Console.app when testing TestFlight)
+                errorTileCallback: (tile, error, stackTrace) {
+                  debugPrint('TILE ERROR z=${tile.coordinates.z} x=${tile.coordinates.x} y=${tile.coordinates.y}: $error');
+                },
+              ),              MarkerLayer(alignment: Alignment.bottomCenter, markers: markers),
               MarkerLayer(alignment: Alignment.center, markers: myMarker),
             ],
           ),
