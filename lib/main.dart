@@ -105,10 +105,20 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> with WidgetsBin
     _mapController = MapController();
     _loadLocationsFromPublishedCsv();
 
-    // Try once after first frame (and show errors so you can see what's happening).
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _goToMyLocation(showErrors: true, auto: true);
-    });
+    // Auto-center only if permission is already granted.
+// If Info.plist is missing location usage strings, Geolocator can throw at startup in release/TestFlight.
+// So we guard everything with try/catch and avoid prompting on launch.
+WidgetsBinding.instance.addPostFrameCallback((_) async {
+  try {
+    final perm = await Geolocator.checkPermission();
+    final ok = perm == LocationPermission.whileInUse || perm == LocationPermission.always;
+    if (ok) {
+      await _goToMyLocation(showErrors: false, auto: true);
+    }
+  } catch (e) {
+    debugPrint('Auto location skipped: $e');
+  }
+});
   }
 
 
@@ -458,26 +468,34 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> with WidgetsBin
   }
 
   Future<void> _goToMyLocation({bool showErrors = true, bool auto = false}) async {
-    if (_loadingMyLocation) return;
+  if (_loadingMyLocation) return;
+  if (auto && _didAutoCenterOnce) return;
 
-    // Don’t keep nagging on app start
-    if (auto && _didAutoCenterOnce) return;
+  setState(() => _loadingMyLocation = true);
 
-    setState(() => _loadingMyLocation = true);
-
+  try {
+    LatLng? loc;
     try {
-      final loc = await _getMyLocation(showErrors: showErrors);
-      if (!mounted || loc == null) return;
-
-      setState(() => _myLocation = loc);
-
-      // Move the map camera to the user location
-      _safeMove(loc, 14.5);
-if (auto) _didAutoCenterOnce = true;
-    } finally {
-      if (mounted) setState(() => _loadingMyLocation = false);
+      loc = await _getMyLocation(showErrors: showErrors);
+    } catch (e, st) {
+      debugPrint('Geolocator error: $e
+$st');
+      if (showErrors) _snack('Location failed. Check Settings and try again.');
+      loc = null;
     }
+
+    if (!mounted || loc == null) return;
+
+    setState(() => _myLocation = loc);
+
+    // ✅ Use safe move (waits for map ready + forces tile refresh)
+    _safeMove(loc, 14.5);
+
+    if (auto) _didAutoCenterOnce = true;
+  } finally {
+    if (mounted) setState(() => _loadingMyLocation = false);
   }
+}
 
   void _nearestSlush() async {
     if (_locations.isEmpty) return;
