@@ -478,8 +478,7 @@ WidgetsBinding.instance.addPostFrameCallback((_) async {
     try {
       loc = await _getMyLocation(showErrors: showErrors);
     } catch (e, st) {
-      debugPrint('Geolocator error: $e
-$st');
+      debugPrint('Geolocator error: \$e\n\$st');
       if (showErrors) _snack('Location failed. Check Settings and try again.');
       loc = null;
     }
