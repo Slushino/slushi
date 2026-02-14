@@ -12,7 +12,37 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SlushiApp());
+
+  // Show a visible error UI instead of a blank screen in release/TestFlight.
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Slushi failed to start:
+
+${details.exceptionAsString()}',
+            style: const TextStyle(fontSize: 14, color: Colors.black),
+          ),
+        ),
+      ),
+    );
+  };
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
+
+  runZonedGuarded(
+    () => runApp(const SlushiApp()),
+    (error, stack) {
+      debugPrint('Uncaught zone error: $error
+$stack');
+    },
+  );
 }
 
 class SlushiApp extends StatelessWidget {
@@ -556,6 +586,7 @@ _openLocationSheet(nearest, best);
                 pinAsset,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
+                errorBuilder: (context, error, stack) => const Icon(Icons.location_on),
               ),
             ),
           ),
@@ -691,7 +722,12 @@ _openLocationSheet(nearest, best);
             right: 14,
             child: Row(
               children: [
-                Image.asset(logoAsset, width: 64, height: 64),
+                Image.asset(
+                  logoAsset,
+                  width: 64,
+                  height: 64,
+                  errorBuilder: (context, error, stack) => const SizedBox(width: 64, height: 64),
+                ),
                 const Spacer(),
                 _PillButton(
                   icon: Icons.near_me,
