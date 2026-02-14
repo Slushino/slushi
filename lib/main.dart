@@ -21,9 +21,7 @@ void main() {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'Slushi failed to start:
-
-${details.exceptionAsString()}',
+            'Slushi failed to start:\n\n${details.exceptionAsString()}',
             style: const TextStyle(fontSize: 14, color: Colors.black),
           ),
         ),
@@ -39,8 +37,7 @@ ${details.exceptionAsString()}',
   runZonedGuarded(
     () => runApp(const SlushiApp()),
     (error, stack) {
-      debugPrint('Uncaught zone error: $error
-$stack');
+      debugPrint('Uncaught zone error: $error\n$stack');
     },
   );
 }
