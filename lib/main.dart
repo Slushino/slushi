@@ -654,7 +654,7 @@ _openLocationSheet(nearest, best);
 
                 // Explicit headers help some servers accept requests on iOS/TestFlight
                 tileProvider: NetworkTileProvider(
-                  headers: const {
+                  headers: <String, String>{
                     'User-Agent': 'no.slushi.app',
                   },
                 ),
