@@ -2,7 +2,7 @@ name: hello_flutter
 description: "Slushi app"
 publish_to: "none"
 
-version: 1.0.0+18
+version: 1.0.0+16
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
@@ -10,29 +10,30 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
   cupertino_icons: ^1.0.8
 
-  # WebView (pin)
-  webview_flutter: 4.5.0
+  # Map + GPS (FIX: 6.2.1 conflicts with Flutter SDK's pinned meta)
+  flutter_map: 6.1.0
+  latlong2: 0.9.1
+  geolocator: 11.1.0
 
-  # Map + gps
-  flutter_map: ^6.1.0
-  latlong2: ^0.9.1
-  geolocator: ^10.1.0
-
-  # HTTP (pin to avoid Dart >=3.2)
+  # Google Sheet
   http: 1.1.0
 
-  # Images + navigate
-  cached_network_image: ^3.3.1
+  # Images + navigation
+  cached_network_image: 3.3.0
+
+  # FIX: avoid Dart >=3.2 requirement
   url_launcher: 6.2.4
+
+  # FIX: 4.6.0+ requires Dart >=3.2.3; you're on Dart 3.1.3
+  webview_flutter: 4.5.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.2
-  flutter_launcher_icons: ^0.13.1
+  flutter_lints: 2.0.0
+  flutter_launcher_icons: 0.13.1
 
 flutter:
   uses-material-design: true
