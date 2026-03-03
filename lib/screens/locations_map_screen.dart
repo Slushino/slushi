@@ -358,13 +358,18 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
       ),
     );
   }
-\n  Future<void> _openOsmCopyright() async {\n    final uri = Uri.parse('https://www.openstreetmap.org/copyright');\n    await launchUrl(uri, mode: LaunchMode.externalApplication);\n  }\n
+
   void _openContactUsInApp() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => WebViewPage(title: 'Contact Us', url: _contactUrl),
       ),
     );
+  }
+
+  Future<void> _openOsmCopyright() async {
+    final uri = Uri.parse('https://www.openstreetmap.org/copyright');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Widget _dbgBtn(String label, VoidCallback onTap) {
@@ -774,7 +779,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
           ),
 
 
-          // OSM ATTRIBUTION
+          // OPENSTREETMAP ATTRIBUTION
           Positioned(
             left: 14,
             bottom: 74,
@@ -793,7 +798,6 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
               ),
             ),
           ),
-
           // PRIVACY
           Positioned(
             left: 14,
