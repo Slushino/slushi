@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,13 +8,6 @@ import 'package:hello_flutter/pages/webview_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-// ANCHORFIX_V2: marker width/height now match drawn markerBox (prevents zoom drift).
-
-
-// Set to true if you ever want the live pin tuning panel back.
-const bool kShowPinTuningPanel = false;
-
 
 /// NOTE:
 /// - UI (logo + pill buttons) matches the original Slushi layout.
@@ -57,21 +51,13 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   static const String _logoAsset = 'assets/Icon2.png';
   static const String _pinAsset = 'assets/pin.png';
 
-  // --- Marker sizing (debug-adjustable)
-  double _markerBox = 51.0; // square hitbox/anchor
-  double _pinWidth = 70.0;
-  double _pinHeight = 90.0;
-
-  double get _hitBoxW => max(_markerBox, _pinWidth + 16.0);
-  double get _hitBoxH => max(_markerBox, _pinHeight + _pinTipOffsetY.abs() + 16.0);
-
-
+  // --- Marker sizing (smaller, as requested)
+  static const double _markerBox = 40; // must be square to prevent jitter drift
+  static const double _pinWidth = 22;
+  static const double _pinHeight = 32;
 
   // Pin-only: anchor LatLng to the actual pointy tip inside the PNG.
   // This compensates for the pin art not being perfectly centered and having a small shadow below the tip.
-
-  // Debug-adjustable in release: change live with the on-screen +/- buttons.
-  double _pinTipOffsetY = -36.0; // calibrated (start) for new pin size; tweak if needed
 
   // --- Map settings
   static const String _tileUrl =
@@ -84,10 +70,9 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
   static const double _minZoom = 4.0;
   static const double _maxZoom = 17.0;
 
-  // --- Debug toggles (enable while tuning pin anchoring)
-  bool _showPinDebugAnchor = false;
-  bool _showLatLngDebugDot = false;
-  bool _showMarkerBoxOutline = false;
+  // --- Debug toggles
+  final bool _showPinDebugAnchor = false;
+  final bool _showLatLngDebugDot = false;
 
   final NetworkTileProvider _tileProvider = NetworkTileProvider(
     headers: <String, String>{
@@ -367,299 +352,39 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
     );
   }
 
-  
-
-  Future<void> _openOsmCopyright() async {
-    final uri = Uri.parse('https://www.openstreetmap.org/copyright');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-Widget _dbgBtn(String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _darkUi ? Colors.white10 : Colors.black.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.black12),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: _darkUi ? Colors.white : Colors.black,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _dbgToggle({
-    required String label,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required bool dark,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Switch(
-          value: value,
-          onChanged: onChanged,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        Text(
-          label,
-          style: TextStyle(color: dark ? Colors.white70 : Colors.black87),
-        ),
-      ],
-    );
-  }
-
-
-
-  // DEBUG panel to tune pin anchoring/sizing LIVE (works in release too).
-  bool _showTuningPanel = true;
-
-  Widget _tuningPanel() {
-    if (!_showTuningPanel) {
-      return Positioned(
-        right: 12,
-        top: 120,
-        child: FloatingActionButton.small(
-          onPressed: () => setState(() => _showTuningPanel = true),
-          child: const Icon(Icons.tune),
-        ),
-      );
-    }
-
-    Widget sliderRow({
-      required String label,
-      required double value,
-      required double min,
-      required double max,
-      required double step,
-      required ValueChanged<double> onChanged,
-    }) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$label: ${value.toStringAsFixed(1)}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                onPressed: () => onChanged((value - step).clamp(min, max)),
-                icon: const Icon(Icons.remove),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                onPressed: () => onChanged((value + step).clamp(min, max)),
-                icon: const Icon(Icons.add),
-              ),
-            ],
-          ),
-          Slider(
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            onChanged: onChanged,
-          ),
-        ],
-      );
-    }
-
-    if (!kShowPinTuningPanel) return const SizedBox.shrink();
-
-    return Positioned(
-      right: 12,
-      top: 120,
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: 280,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.72),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: DefaultTextStyle(
-            style: const TextStyle(color: Colors.white),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Pin tuning (release)',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => setState(() => _showTuningPanel = false),
-                      icon: const Icon(Icons.close, color: Colors.white),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    FilterChip(
-                      label: const Text('Box outline'),
-                      selected: _showMarkerBoxOutline,
-                      onSelected: (v) => setState(() => _showMarkerBoxOutline = v),
-                      selectedColor: Colors.white24,
-                      checkmarkColor: Colors.white,
-                      labelStyle: const TextStyle(color: Colors.white),
-                    ),
-                    FilterChip(
-                      label: const Text('Anchor dot'),
-                      selected: _showPinDebugAnchor,
-                      onSelected: (v) => setState(() => _showPinDebugAnchor = v),
-                      selectedColor: Colors.white24,
-                      checkmarkColor: Colors.white,
-                      labelStyle: const TextStyle(color: Colors.white),
-                    ),
-                    FilterChip(
-                      label: const Text('LatLng dot'),
-                      selected: _showLatLngDebugDot,
-                      onSelected: (v) => setState(() => _showLatLngDebugDot = v),
-                      selectedColor: Colors.white24,
-                      checkmarkColor: Colors.white,
-                      labelStyle: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                sliderRow(
-                  label: 'Tip Y (px)',
-                  value: _pinTipOffsetY,
-                  min: -80,
-                  max: 30,
-                  step: 1,
-                  onChanged: (v) => setState(() => _pinTipOffsetY = v),
-                ),
-                sliderRow(
-                  label: 'Marker box',
-                  value: _markerBox,
-                  min: 28,
-                  max: 80,
-                  step: 1,
-                  onChanged: (v) => setState(() => _markerBox = v),
-                ),
-                sliderRow(
-                  label: 'Pin width',
-                  value: _pinWidth,
-                  min: 16,
-                  max: 70,
-                  step: 1,
-                  onChanged: (v) => setState(() => _pinWidth = v),
-                ),
-                sliderRow(
-                  label: 'Pin height',
-                  value: _pinHeight,
-                  min: 20,
-                  max: 90,
-                  step: 1,
-                  onChanged: (v) => setState(() => _pinHeight = v),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _markerBox = 46;
-                          _pinWidth = 26;
-                          _pinHeight = 38;
-                          _pinTipOffsetY = -45.0;
-                        });
-                      },
-                      child: const Text('Reset'),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Send me: box=${_markerBox.toStringAsFixed(1)}, w=${_pinWidth.toStringAsFixed(1)}, h=${_pinHeight.toStringAsFixed(1)}, tipY=${_pinTipOffsetY.toStringAsFixed(1)}',
-                        style: const TextStyle(fontSize: 11, color: Colors.white70),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bg = _darkUi ? const Color(0xFF07121A) : const Color(0xFFEAF6FF);
 
     final List<Marker> markers = [
       for (final loc in _locations) ...[
-        // Slush pin: anchor to bottom tip and keep upright (MarkerLayer.rotate=true)
+        // Slush pin: anchor to bottom tip and keep upright (MarkerLayer.rotate=false)
         Marker(
           point: loc.point,
-          width: _markerBox,
-          height: _markerBox,
-          alignment: Alignment.bottomCenter,
-          rotate: true,
+          width: _pinWidth,
+          height: _pinHeight,
+          anchorPos: AnchorPos.align(AnchorAlign.bottom),
+          rotate: false,
           child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () {
-              final dist = _myLocation == null
-                  ? 0.0
-                  : const Distance().distance(_myLocation!, loc.point);
-              _openLocationSheet(loc, dist);
-            },
+            onTap: () => _openLocationSheet(loc, 0),
             child: SizedBox(
-                width: _hitBoxW,
-                height: _hitBoxH,
+              width: _pinWidth,
+              height: _pinHeight,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  if (_showMarkerBoxOutline)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.purpleAccent, width: 1),
-                          ),
-                        ),
-                      ),
-                    ),
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Transform.translate(
-                      offset: Offset(0, _pinTipOffsetY),
-                      child: Image.asset(
-                        _pinAsset,
-                        width: _pinWidth,
-                        height: _pinHeight,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.bottomCenter,
-                      ),
+                  Positioned.fill(
+                    child: Image.asset(
+                      _pinAsset,
+                      width: _pinWidth,
+                      height: _pinHeight,
+                      fit: BoxFit.fill,
+                      alignment: Alignment.bottomCenter,
                     ),
                   ),
                   if (_showPinDebugAnchor)
                     Positioned(
-                      left: (_markerBox / 2) - 2,
+                      left: (_pinWidth / 2) - 2,
                       bottom: -2,
                       child: Container(
                         width: 4,
@@ -682,7 +407,7 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
             point: loc.point,
             width: 10,
             height: 10,
-          alignment: Alignment.center,
+            anchorPos: AnchorPos.align(AnchorAlign.center),
             rotate: false,
             child: Container(
               width: 10,
@@ -699,7 +424,7 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
           point: _myLocation!,
           width: 18,
           height: 18,
-          alignment: Alignment.center,
+          anchorPos: AnchorPos.align(AnchorAlign.center),
           child: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -742,8 +467,9 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
                   duration: Duration(milliseconds: 150),
                 ),
                 tileUpdateTransformer: TileUpdateTransformers.ignoreTapEvents,
+                ),
               ),
-              MarkerLayer(markers: markers, rotate: true),
+              MarkerLayer(markers: markers, rotate: false),
             ],
           ),
 
@@ -756,24 +482,23 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
               children: [
                 Image.asset(_logoAsset, width: 64, height: 64),
                 const Spacer(),
-                Transform.translate(
-                  offset: const Offset(-14, 0), // nudge pills left to feel more centered
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _PillButton(
-                        icon: Icons.near_me_outlined,
-                        text: 'Nearest slush',
-                        onTap: _nearestSlush,
-                      ),
-                      const SizedBox(width: 12),
-                      _PillButton(
-                        icon: Icons.email_outlined,
-                        text: 'Contact Us',
-                        onTap: _openContactUsInApp,
-                      ),
-                    ],
-                  ),
+                _PillButton(
+                  icon: Icons.near_me_outlined,
+                  text: 'Nearest slush',
+                  onTap: _nearestSlush,
+                ),
+                const SizedBox(width: 12),
+                _PillButton(
+                  icon: Icons.email_outlined,
+                  text: 'Contact Us',
+                  onTap: _openContactUsInApp,
+                ),
+                const SizedBox(width: 12),
+                _PillIconButton(
+                  icon: _darkUi
+                      ? Icons.wb_sunny_outlined
+                      : Icons.nightlight_round,
+                  onTap: () => setState(() => _darkUi = !_darkUi),
                 ),
               ],
             ),
@@ -782,17 +507,36 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
           // PRIVACY
           Positioned(
             left: 14,
-            bottom: 18,
+            bottom: 74,
             child: _PillButton(
               icon: Icons.privacy_tip_outlined,
               text: 'Privacy Policy',
               onTap: _openPrivacyInApp,
             ),
           ),
-          // MY LOCATION
+          // OSM attribution (required)
           Positioned(
             right: 14,
             bottom: 18,
+            child: Opacity(
+              opacity: 0.85,
+              child: GestureDetector(
+                onTap: () => launchUrl(
+                  Uri.parse('https://www.openstreetmap.org/copyright'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: const Text(
+                  '© OpenStreetMap contributors',
+                  style: TextStyle(fontSize: 11, color: Colors.black87),
+                ),
+              ),
+            ),
+          ),
+
+          // MY LOCATION
+          Positioned(
+            right: 14,
+            bottom: 74,
             child: _PillIconButton(
               icon: _loadingMyLocation
                   ? Icons.hourglass_empty
@@ -801,26 +545,6 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
                   _getMyLocation(auto: false, showErrors: true).then((loc) {
                     if (loc != null) _safeMove(loc, 14.5);
                   }),
-            ),
-          ),
-
-          // © OpenStreetMap attribution (required)
-          Positioned(
-            right: 14,
-            bottom: 74,
-            child: GestureDetector(
-              onTap: _openOsmCopyright,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xCCFFFFFF),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  '© OpenStreetMap contributors',
-                  style: TextStyle(fontSize: 11),
-                ),
-              ),
             ),
           ),
 
@@ -844,7 +568,6 @@ Widget _dbgBtn(String label, VoidCallback onTap) {
                 ),
               ),
             ),
-          _tuningPanel(),
         ],
       ),
     );
