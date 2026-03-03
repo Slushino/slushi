@@ -363,7 +363,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
           point: loc.point,
           width: _pinWidth,
           height: _pinHeight,
-          anchorPos: AnchorPos.align(AnchorAlign.bottom),
+          alignment: Alignment.bottomCenter,
           rotate: false,
           child: GestureDetector(
             onTap: () => _openLocationSheet(loc, 0),
@@ -407,7 +407,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
             point: loc.point,
             width: 10,
             height: 10,
-            anchorPos: AnchorPos.align(AnchorAlign.center),
+            alignment: Alignment.center,
             rotate: false,
             child: Container(
               width: 10,
@@ -424,7 +424,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
           point: _myLocation!,
           width: 18,
           height: 18,
-          anchorPos: AnchorPos.align(AnchorAlign.center),
+          alignment: Alignment.center,
           child: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -514,6 +514,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
               onTap: _openPrivacyInApp,
             ),
           ),
+
           // OSM attribution (required)
           Positioned(
             right: 14,
