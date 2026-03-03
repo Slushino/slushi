@@ -367,7 +367,13 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
     );
   }
 
-  Widget _dbgBtn(String label, VoidCallback onTap) {
+  
+
+  Future<void> _openOsmCopyright() async {
+    final uri = Uri.parse('https://www.openstreetmap.org/copyright');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+Widget _dbgBtn(String label, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -795,6 +801,26 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
                   _getMyLocation(auto: false, showErrors: true).then((loc) {
                     if (loc != null) _safeMove(loc, 14.5);
                   }),
+            ),
+          ),
+
+          // © OpenStreetMap attribution (required)
+          Positioned(
+            right: 14,
+            bottom: 74,
+            child: GestureDetector(
+              onTap: _openOsmCopyright,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xCCFFFFFF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  '© OpenStreetMap contributors',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ),
             ),
           ),
 
