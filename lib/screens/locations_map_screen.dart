@@ -606,6 +606,79 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
     );
   }
 
+  Widget _buildResponsiveTopBar(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final shortest = size.shortestSide;
+    final isCompact = shortest < 390 || size.width < 430;
+
+    final double sidePadding = isCompact ? 10 : 14;
+    final double topInset = isCompact ? 20 : 34;
+    final double logoSize = isCompact ? 48 : 64;
+    final double gap = isCompact ? 8 : 12;
+
+    final buttons = Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: gap,
+      runSpacing: gap,
+      children: [
+        _PillButton(
+          icon: Icons.near_me_outlined,
+          text: 'Nearest slush',
+          onTap: _nearestSlush,
+          compact: isCompact,
+        ),
+        _PillButton(
+          icon: Icons.email_outlined,
+          text: 'Contact Us',
+          onTap: _openContactUsInApp,
+          compact: isCompact,
+        ),
+      ],
+    );
+
+    return Positioned(
+      top: topInset,
+      left: sidePadding,
+      right: sidePadding,
+      child: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stackVertically = isCompact || constraints.maxWidth < 360;
+
+            if (stackVertically) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Image.asset(_logoAsset, width: logoSize, height: logoSize),
+                  SizedBox(height: gap),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: buttons,
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Image.asset(_logoAsset, width: logoSize, height: logoSize),
+                const Spacer(),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: buttons,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = _darkUi ? const Color(0xFF07121A) : const Color(0xFFEAF6FF);
@@ -615,8 +688,8 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
         // Slush pin: anchor to bottom tip and keep upright (MarkerLayer.rotate=true)
         Marker(
           point: loc.point,
-          width: _markerBox,
-          height: _markerBox,
+          width: _hitBoxW,
+          height: _hitBoxH,
           alignment: Alignment.bottomCenter,
           rotate: true,
           child: GestureDetector(
@@ -746,38 +819,7 @@ class _LocationsMapScreenState extends State<LocationsMapScreen> {
             ],
           ),
 
-          // TOP BAR (logo + pills) - original layout
-          Positioned(
-            top: 34,
-            left: 14,
-            right: 14,
-            child: Row(
-              children: [
-                Image.asset(_logoAsset, width: 64, height: 64),
-                const Spacer(),
-                Transform.translate(
-                  offset: const Offset(-14, 0), // nudge pills left to feel more centered
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _PillButton(
-                        icon: Icons.near_me_outlined,
-                        text: 'Nearest slush',
-                        onTap: _nearestSlush,
-                      ),
-                      const SizedBox(width: 12),
-                      _PillButton(
-                        icon: Icons.email_outlined,
-                        text: 'Contact Us',
-                        onTap: _openContactUsInApp,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
+          _buildResponsiveTopBar(context),
 
           // OPENSTREETMAP ATTRIBUTION
           Positioned(
@@ -854,11 +896,13 @@ class _PillButton extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback onTap;
+  final bool compact;
 
   const _PillButton({
     required this.icon,
     required this.text,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
@@ -867,7 +911,10 @@ class _PillButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 12 : 14,
+          vertical: compact ? 9 : 10,
+        ),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.92),
           borderRadius: BorderRadius.circular(22),
@@ -882,13 +929,14 @@ class _PillButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: Colors.black87),
-            const SizedBox(width: 8),
+            Icon(icon, size: compact ? 17 : 18, color: Colors.black87),
+            SizedBox(width: compact ? 6 : 8),
             Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: Colors.black87,
+                fontSize: compact ? 13 : 14,
               ),
             ),
           ],
